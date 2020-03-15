@@ -1,0 +1,218 @@
+//思路：先用一个长度为STRLEN的字符数组，存取一行数据，将其切割成若干个若干个
+//小的数字，用字符数组储存，然后通过sscanf转换成浮点数，将其存储到长度为 LINE * COLUM的二维浮点型数组里
+
+//注：sscanf与scanf类似，都是用于输入的，只是后者以键盘(stdin)为输入源，前者以固定字符串为输入源。
+#define _CRT_SECURE_NO_WARNINGS
+#include<cstdio>
+#include<cmath>
+
+//数据准备
+#define COLUM 14
+#define LINE 178
+#define STRLEN 100
+#define DIGIT 10
+float Digit[LINE][COLUM];//该数组用于存储数据(用全局二维数组来存储数据)
+
+//函数声明
+void txt_to_array(FILE* fp);//将wine.txt的数据存入二维数组
+void kill_ch();//处理数组中的#
+void deal_with_decimal();//将数组中的元素处理成一位小数
+void put_in_wine_cpl(FILE* fp);//将数据写入二进制文件wine_cpl.dat中
+void min_max_solution(); //将数组数据归一化处理
+void put_in_wine_norm(FILE* fp);//将数据写入文件wine_norm.csv中
+//void output();//输出数组元素
+//void display_information(FILE* fp);//输出二进制文件
+
+
+
+
+int main()
+{
+	//将wine.txt的数据写入二维数组
+	FILE* fp = fopen("L:\\wine.txt", "r");
+	if (fp == NULL)
+	{
+		printf("文件打开失败\n");
+		return -1;
+	}
+	txt_to_array(fp);
+	fclose(fp);
+
+	//处理数组中的#，以及将数据保留一位小数
+	kill_ch();
+	deal_with_decimal();
+	//output();
+
+	//将数据写入二进制文件wine_cpl.dat中
+	fp = fopen("L:\\wine_cpl.dat", "w+b");
+	if (fp == NULL)
+	{
+		printf("文件打开失败\n");
+		return -1;
+	}
+	put_in_wine_cpl(fp);
+	fclose(fp);
+
+	//输出检查
+	//fp = fopen("wine_cpl.dat", "rb");
+	//display_information(fp);
+	//fclose(fp);
+
+	//将数据归一化处理，并写入wine_norm.csv当中
+	fp = fopen("L:\\wine_norm.csv", "w");
+	if (fp == NULL)
+	{
+		printf("文件打开失败\n");
+		return -1;
+	}
+	min_max_solution();
+	deal_with_decimal();
+	put_in_wine_norm(fp);
+	fclose(fp);
+
+
+	return 0;
+}
+
+void txt_to_array(FILE* fp)
+{
+	char DightLine[100] = { '\0' };//用来存储一行的数据
+	char single_dight[10] = { '\0' };
+	fscanf(fp, "%s", &DightLine);
+	for (int cur_line = 0; cur_line < LINE; ++cur_line)
+	{
+		//对读取到的一行数据进行操作
+		char* head, * tail;//用两个指针标记寻找切割区间
+		head = tail = DightLine;
+		for (int i = 0; i < COLUM; ++i)//对读取到的一行数据进行操作
+		{
+			//head往前跑,寻找切割区间
+			while ((*head != ',') && (*head != '\0'))
+				++head;
+			//head已经指向下一个数字前的','
+
+			//下面开始进行复制
+			int j = 0;//方便结尾附上结束符
+			for (; tail < head && j < 9; ++tail, ++j)
+				single_dight[j] = *tail;
+			single_dight[j] = '\0';
+
+			//将数据存入二维数组
+			//如果切割下来的是一个数字，则存入二维数组
+			//否则，则将对应位置的数组元素赋值为-1
+			if (single_dight[0] == '#')
+				Digit[cur_line][i] = -1;
+			else
+				sscanf(single_dight, "%f", &Digit[cur_line][i]);
+
+			//下一次循环准备
+			head++;
+			tail = head;
+			for (char* p = single_dight; *p != '\0'; ++p)
+				*p = '\0';
+		}
+		fscanf(fp, "%s", &DightLine);//读取下一行的数据
+	}
+}
+
+void kill_ch()
+{
+	for (int line = 0; line < LINE; ++line)
+		for (int col = 0; col < COLUM; ++col)
+			if ((Digit[line][col] - (-1)) < 1e-6) //发现-1
+			{
+				int num = 0;
+				float sum = 0, average = 0;
+				//求第col列的平均值，将该列所有空缺都用平均值进行修改
+				for (int i = 0; i < LINE; ++i)
+					if ((Digit[i][col] - (-1)) < 1e-6) //是-1
+						continue;
+					else
+					{
+						num++;
+						sum += Digit[i][col];
+					}
+				//计算平均值，并填入数组
+				average = sum / (float)num;
+				for (int i = 0; i < LINE; ++i)
+					if ((Digit[i][col] - (-1)) < 1e-6)
+						Digit[i][col] = average;
+			}
+}
+
+void deal_with_decimal()
+{
+	float temp;
+	for (int line = 0; line < LINE; ++line)
+		for (int col = 0; col < COLUM; ++col)
+		{
+			temp = 10 * Digit[line][col];
+			temp += 0.5;
+			temp = floor(temp);
+			Digit[line][col] = temp / 10;
+		}
+}
+
+void put_in_wine_cpl(FILE* fp)
+{
+	for (int line = 0; line < LINE; ++line)
+		for (int col = 0; col < COLUM; ++col)
+			fwrite(&Digit[line][col], sizeof(float), 1, fp);
+}
+
+void put_in_wine_norm(FILE* fp)
+{
+	for (int line = 0; line < LINE; ++line)
+		for (int col = 0; col < COLUM; ++col)
+		{
+			fprintf(fp, "%.1f", Digit[line][col]);
+			if (col == COLUM - 1)//已经是该行的最后一个数字
+				fputc('\n', fp);
+			else
+				fputc(',', fp);
+		}
+}
+
+void min_max_solution()
+{
+	float min, max;
+	for (int col = 1; col < COLUM; ++col)
+	{
+		max = min = Digit[0][col];
+		for (int i = 0; i < LINE; ++i)//寻找最大值
+			if (Digit[i][col] > max)
+				max = Digit[i][col];
+		for (int i = 0; i < LINE; ++i)//寻找最小值
+			if (Digit[i][col] < min)
+				min = Digit[i][col];
+
+		if (fabs(max - min) < 1e-6)//如果最大值和最小值相等,则该属性归化为1
+			for (int i = 0; i < LINE; ++i)
+				Digit[i][col] = 1;
+		else //用公式归化
+			for (int i = 0; i < LINE; ++i)
+				Digit[i][col] = (Digit[i][col] - min) / (max - min);
+	}
+
+}
+
+/*void output()
+{
+	for (int i = 0; i < LINE; ++i)
+	{
+		for (int j = 0; j < COLUM; ++j)
+			printf("%f  ", Digit[i][j]);
+		printf("\n");
+	}
+}
+
+void display_information(FILE* fp)
+{
+	float n;
+	fread(&n, sizeof(n), 1, fp);
+	while (!feof(fp))
+	{
+		printf("%.1f ", n);
+		fread(&n, sizeof(n), 1, fp);
+	}
+}*/
